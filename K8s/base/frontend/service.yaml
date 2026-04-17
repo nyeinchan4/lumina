@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lumina-frontend-service
+  labels:
+    app: lumina-frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: lumina-frontend
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80

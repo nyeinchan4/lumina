@@ -35,6 +35,23 @@ variable "private_subnet_b" {
 }
 
 variable "cluster_name" {
-  type = string
+  type    = string
   default = "dev-cluster"
+}
+
+variable "db_name" {
+  type    = string
+  default = "coredb"
+}
+
+variable "master_username" {
+  type    = string
+  default = "postgres"
+  sensitive = true
+}
+
+variable "master_password" {
+  type      = string
+  default = "your_secure_password_here"
+  sensitive = true
 }

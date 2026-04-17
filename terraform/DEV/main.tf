@@ -20,6 +20,16 @@ module "eks_cluster" {
   private_subnet_ids = module.networking.private_subnet_ids
 }
 
+module "rds" {
+  source             = "../modules/rds"
+  vpc_id             = module.networking.vpc_id
+  vpc_cidr           = var.vpc_cidr
+  private_subnet_ids = module.networking.private_subnet_ids
+  db_name            = var.db_name
+  master_username    = var.master_username
+  master_password    = var.master_password
+}
+
 module "eks_cluster_nodes" {
   source                    = "../modules/eks_cluster_nodes"
   cluster_name              = module.eks_cluster.cluster_name

@@ -7,26 +7,67 @@ Simple project with:
 - Colorful frontend theme
 
 ## Stack
+
 - Frontend: React (Vite)
 - Backend: Node.js + Express
-- Database: PostgreSQL
+- Database: PostgreSQL (local Docker or AWS RDS)
+- Infrastructure: Terraform (AWS EKS + RDS + VPC)
+- Ingress: Traefik on EKS (Classic ELB via AWS Cloud Controller)
 
-## 1) Start PostgreSQL
+## Project Structure
 
-Use Docker:
+```
+Lumina/
+├── backend/                        # Node.js + Express API
+├── frontend/                       # React (Vite)
+├── k8s/
+│   └── base/
+│       ├── frontend/
+│       │   ├── deployment.yaml
+│       │   └── service.yaml
+│       └── backend/
+│           ├── deployment.yaml
+│           ├── service.yaml
+│           └── secret.yaml         # RDS credentials (gitignored)
+├── K8s/
+│   └── ingress-controller/
+│       ├── install.sh
+│       └── values.yaml
+├── terraform/
+│   ├── DEV/                        # Root module (entry point)
+│   └── modules/
+│       ├── networking/             # VPC, subnets, IGW, NAT
+│       ├── eks_cluster/            # EKS control plane + IAM
+│       ├── eks_cluster_nodes/      # Self-managed nodes + ASG
+│       └── rds/                    # PostgreSQL RDS instance
+└── kubernetes/                     # Legacy manifests (reference only)
+```
+
+## API Endpoints
+
+- `POST /api/auth/register`
+  - body: `{ "username": "demo", "email": "demo@mail.com", "password": "secret123" }`
+- `POST /api/auth/login`
+  - body: `{ "identifier": "demo", "password": "secret123" }`
+
+---
+
+## Local Development
+
+### 1) Start PostgreSQL
 
 ```bash
 docker compose up -d
 ```
 
-This starts PostgreSQL on `localhost:5432` with:
+Starts PostgreSQL on `localhost:5432`:
 - Database: `auth_app`
 - User: `postgres`
 - Password: `postgres`
 
-Table creation script runs automatically from `backend/database/init.sql`.
+Table creation runs automatically from `backend/database/init.sql`.
 
-## 2) Start Backend
+### 2) Start Backend
 
 ```bash
 cd backend
@@ -34,11 +75,9 @@ npm install
 npm run dev
 ```
 
-Backend runs on `http://localhost:4000`.
+Backend runs on `http://localhost:4000`. Environment file: `backend/.env`.
 
-Environment file is already included in `backend/.env`.
-
-## 3) Start Frontend
+### 3) Start Frontend
 
 ```bash
 cd frontend
@@ -48,29 +87,9 @@ npm run dev
 
 Frontend runs on `http://localhost:5173`.
 
-## API Endpoints
+---
 
-- `POST /api/auth/register`
-  - body: `{ "username": "demo", "email": "demo@mail.com", "password": "secret123" }`
-- `POST /api/auth/login`
-  - body: `{ "identifier": "demo", "password": "secret123" }`
-
-## Notes
-
-- No email verification is required for account creation.
-- Passwords are hashed with bcrypt.
-- Login accepts username or email.
-
-## Docker Notes (Backend + Frontend)
-
-- Backend Docker env file: `backend/.env.docker`
-- Frontend Docker env file: `frontend/.env.docker`
-
-Recommended image names:
-
-- `lacygu-frontend`
-- `lacygu-backend`
-- `lacygu-postgres`
+## Docker
 
 Build images:
 
@@ -79,7 +98,7 @@ docker build -t lacygu-backend:latest ./backend
 docker build -t lacygu-frontend:latest --build-arg VITE_API_URL=http://localhost:4000 ./frontend
 ```
 
-Run PostgreSQL container:
+Run containers:
 
 ```bash
 docker run -d --name lacygu-postgres -p 35432:5432 \
@@ -87,71 +106,114 @@ docker run -d --name lacygu-postgres -p 35432:5432 \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=postgres \
   postgres:16
-```
 
-Run backend container:
-
-```bash
 docker run -d --name lacygu-backend -p 4000:4000 --env-file backend/.env.docker lacygu-backend:latest
-```
-
-Run frontend container:
-
-```bash
 docker run -d --name lacygu-frontend -p 8080:80 lacygu-frontend:latest
 ```
 
-Important:
+- Frontend available at `http://localhost:8080`
+- Vite variables are baked at build time — pass `VITE_API_URL` via `--build-arg`
+- Remove existing containers first if needed: `docker rm -f lacygu-frontend lacygu-backend lacygu-postgres`
 
-- Vite variables are baked during build, so frontend API URL must be passed using `--build-arg` when building the image.
-- Open frontend at `http://localhost:8080`.
-- If a container name already exists, remove it first:
+---
+
+## Terraform (AWS Infrastructure)
+
+### Prerequisites
+
+- AWS credentials configured
+- Terraform >= 1.0
+
+### Provision
 
 ```bash
-docker rm -f lacygu-frontend lacygu-backend lacygu-postgres
+cd terraform/DEV
+terraform init
+terraform plan -var="db_password=yourpassword"
+terraform apply -var="db_password=yourpassword"
 ```
 
-## Kubernetes Ingress (Traefik)
+This provisions:
+- VPC with public/private subnets (tagged for EKS ELB discovery)
+- EKS cluster (`dev-cluster`) with self-managed node group (2x `t3.medium`)
+- RDS PostgreSQL (`db.t3.micro`, private subnets, no public access)
 
-This project uses Traefik as the Ingress Controller for local Kubernetes.
-
-Install Traefik Ingress Controller:
+### Get RDS Endpoint
 
 ```bash
-helm repo add traefik https://traefik.github.io/charts
-helm repo update
-kubectl create namespace traefik --dry-run=client -o yaml | kubectl apply -f -
-helm upgrade --install traefik traefik/traefik -n traefik \
-  --set ingressClass.enabled=true \
-  --set ingressClass.isDefaultClass=true \
-  --set providers.kubernetesIngress.enabled=true \
-  --set image.registry=ghcr.io \
-  --set image.repository=traefik/traefik \
-  --set image.tag=v3.6.11
+terraform output rds_endpoint
 ```
 
-Verify installation:
+### Modules
+
+| Module | Description |
+|---|---|
+| `networking` | VPC, subnets, IGW, NAT Gateway, route tables |
+| `eks_cluster` | EKS control plane, IAM role |
+| `eks_cluster_nodes` | Launch template, ASG, node IAM role |
+| `rds` | RDS PostgreSQL instance, subnet group, security group |
+
+> **KodeKloud note:** `performance_insights` and `iam_database_authentication` are disabled due to sandbox IAM restrictions. `authentication_mode` is set to `API_AND_CONFIG_MAP` to match the pre-created cluster state.
+
+---
+
+## Kubernetes (EKS)
+
+### Install Traefik Ingress Controller
+
+```bash
+cd K8s/ingress-controller
+bash install.sh
+```
+
+Verify:
 
 ```bash
 kubectl -n traefik get pods
-kubectl -n traefik get svc
+kubectl -n traefik get svc        # EXTERNAL-IP should show ELB hostname
 kubectl get ingressclass
 ```
 
-Expected ingress class:
+Traefik creates a `Service type=LoadBalancer` which triggers AWS to provision a Classic ELB automatically.
 
-- Name: `traefik`
-- Controller: `traefik.io/ingress-controller`
+### Deploy Application
 
-Apply project Kubernetes resources:
+**1) Fill in RDS credentials in `k8s/base/backend/secret.yaml`:**
 
-```bash
-kubectl apply -f kubernetes/lacygu-backend-manifest.yml
-kubectl apply -f kubernetes/lacygu-frontend-manifest.yml
-kubectl apply -f kubernetes/kacygu-ingress.yml
+```yaml
+stringData:
+  DB_HOST: "<terraform output rds_endpoint>"
+  DB_PORT: "5432"
+  DB_NAME: "appdb"
+  DB_USER: "postgres"
+  DB_PASSWORD: "<your-db-password>"
 ```
 
-Notes:
+**2) Apply manifests:**
 
-- If Docker Hub image pull has EOF issues, use the GHCR image settings shown above.
-- For frontend-to-backend communication in-cluster, use backend service DNS such as `http://lacygu-backend-service:4000`.
+```bash
+kubectl apply -f k8s/base/backend/secret.yaml
+kubectl apply -f k8s/base/backend/deployment.yaml
+kubectl apply -f k8s/base/backend/service.yaml
+kubectl apply -f k8s/base/frontend/deployment.yaml
+kubectl apply -f k8s/base/frontend/service.yaml
+```
+
+### How DB Credentials Work
+
+```
+RDS (Terraform) → secret.yaml → K8s Secret → backend Pod (env vars via envFrom)
+```
+
+The backend deployment uses `envFrom.secretRef` to load all keys from the secret as environment variables (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`).
+
+> `secret.yaml` is gitignored — never commit real credentials.
+
+---
+
+## Notes
+
+- No email verification required for account creation
+- Passwords are hashed with bcrypt
+- Login accepts username or email
+- For in-cluster frontend-to-backend communication, use `http://lumina-backend-service:4000`

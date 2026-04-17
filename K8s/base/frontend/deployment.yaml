@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumina-frontend-deployment
+  labels:
+    app: lumina-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lumina-frontend
+  template:
+    metadata:
+      labels:
+        app: lumina-frontend
+    spec:
+      containers:
+      - name: lumina-frontend
+        image: nyeinchan312/lumina-frontend:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: REACT_APP_BACKEND_URL
+          value: "http://lumina-backend-service:4000"

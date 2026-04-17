@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumina-backend-deployment
+  labels:
+    app: lumina-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lumina-backend
+  template:
+    metadata:
+      labels:
+        app: lumina-backend
+    spec:
+      containers:
+      - name: lumina-backend
+        image: nyeinchan312/lumina-backend:latest
+        ports:
+        - containerPort: 4000
+        envFrom:
+        - secretRef:
+            name: lumina-db-secret
