@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "app/frontend/**"
+      - ".github/workflows/frontend-dev.yml"
 
 jobs:
   build-push:

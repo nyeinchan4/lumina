@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "app/backend/**"
+      - ".github/workflows/backend-dev.yml"
 
 jobs:
   build-push:
