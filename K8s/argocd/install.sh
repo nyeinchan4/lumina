@@ -17,6 +17,10 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -
 # Patch argocd-server service to LoadBalancer (for EKS)
 kubectl patch svc argocd-server -n $NAMESPACE -p '{"spec": {"type": "LoadBalancer"}}'
 
+# Install ArgoCD Image Updater
+echo "Installing ArgoCD Image Updater..."
+kubectl apply -n $NAMESPACE -f https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/stable/manifests/install.yaml
+
 echo ""
 echo "ArgoCD installed successfully!"
 echo ""

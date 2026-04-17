@@ -3,12 +3,16 @@ kind: Application
 metadata:
   name: lumina-frontend
   namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: frontend=<your-dockerhub-username>/lumina-frontend:dev
+    argocd-image-updater.argoproj.io/frontend.update-strategy: digest
+    argocd-image-updater.argoproj.io/frontend.pull-secret: pullsecret:argocd/dockerhub-creds
 spec:
   project: default
   source:
     repoURL: https://github.com/<your-username>/<your-repo>.git
     targetRevision: main
-    path: k8s/base/frontend
+    path: K8s/base/frontend
   destination:
     server: https://kubernetes.default.svc
     namespace: default

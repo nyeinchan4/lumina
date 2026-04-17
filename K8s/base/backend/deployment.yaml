@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: lumina-backend
-        image: nyeinchan312/lumina-backend:latest
+        image: nyeinchan312/lumina-backend:dev
         ports:
         - containerPort: 4000
         envFrom:
