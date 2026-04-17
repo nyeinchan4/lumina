@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import './App.css'
 
 function App() {
-  const apiBaseUrl = useMemo(() => import.meta.env.VITE_API_URL || 'http://localhost:4000', [])
+  const apiBaseUrl = useMemo(() => import.meta.env.VITE_API_URL || '', [])
   const [isLoginMode, setIsLoginMode] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)

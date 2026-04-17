@@ -32,7 +32,7 @@ variable "master_password" {
 
 variable "engine_version" {
   type    = string
-  default = "16.3"
+  default = "16.6"
 }
 
 variable "instance_class" {
