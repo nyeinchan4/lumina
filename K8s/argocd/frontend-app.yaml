@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: lumina-frontend
+  name: lumina-frontend-dev
   namespace: argocd
   annotations:
-    argocd-image-updater.argoproj.io/image-list: frontend=<your-dockerhub-username>/lumina-frontend:dev
+    argocd-image-updater.argoproj.io/image-list: frontend=nyeinchan312/lumina-frontend:dev
     argocd-image-updater.argoproj.io/frontend.update-strategy: digest
     argocd-image-updater.argoproj.io/frontend.pull-secret: pullsecret:argocd/dockerhub-creds
 spec:
@@ -12,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/<your-username>/<your-repo>.git
     targetRevision: main
-    path: K8s/base/frontend
+    path: K8s/overlays/dev/frontend
   destination:
     server: https://kubernetes.default.svc
     namespace: default
