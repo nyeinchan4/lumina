@@ -1,0 +1,55 @@
+# ─── Node / npm ───────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# ─── Frontend build ───────────────────────────────────────────
+frontend/dist/
+frontend/dist-ssr/
+frontend/.env
+frontend/*.local
+
+# ─── Backend ──────────────────────────────────────────────────
+backend/.env
+backend/dist/
+
+# ─── Environment files (keep .example and .docker) ────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.docker
+
+# ─── Terraform ────────────────────────────────────────────────
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+*.tfplan
+tfplan
+terraform/temp/
+terraform/DEV/variables.tfvars
+terraform/**/.terraform.lock.hcl
+
+# ─── SSH keys ─────────────────────────────────────────────────
+*.pem
+*.key
+!*.key.example
+
+# ─── Docker ───────────────────────────────────────────────────
+.docker/
+
+# ─── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Editor ───────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.sw?

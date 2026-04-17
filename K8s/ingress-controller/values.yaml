@@ -1,0 +1,48 @@
+deployment:
+  enabled: true
+  replicas: 1
+
+service:
+  enabled: true
+  type: LoadBalancer
+  annotations: {}
+  externalTrafficPolicy: Cluster
+  healthPort: 9100
+
+ports:
+  web:
+    port: 8000
+    hostPort: 8000
+    expose: {}
+    exposedPort: 80
+    protocol: TCP
+  websecure:
+    port: 8443
+    hostPort: 8443
+    expose: {}
+    exposedPort: 443
+    protocol: TCP
+
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+  name: traefik
+
+ingressRoute:
+  dashboard:
+    enabled: true
+    ingressClassName: traefik
+
+rbac:
+  enabled: true
+
+providers:
+  kubernetesCRD:
+    enabled: true
+  kubernetesIngress:
+    enabled: true
+
+persistence:
+  enabled: false
+
+resources: {}
