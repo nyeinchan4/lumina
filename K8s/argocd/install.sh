@@ -14,9 +14,6 @@ kubectl apply -n $NAMESPACE -f https://raw.githubusercontent.com/argoproj/argo-c
 echo "Waiting for ArgoCD pods to be ready..."
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n $NAMESPACE --timeout=300s
 
-# Patch argocd-server service to LoadBalancer (for EKS)
-kubectl patch svc argocd-server -n $NAMESPACE -p '{"spec": {"type": "LoadBalancer"}}'
-
 # Install ArgoCD Image Updater
 echo "Installing ArgoCD Image Updater..."
 kubectl apply -n $NAMESPACE -f https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/stable/manifests/install.yaml
@@ -27,7 +24,8 @@ echo ""
 echo "Get admin password:"
 echo "  kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
 echo ""
-echo "Get ArgoCD URL:"
-echo "  kubectl -n argocd get svc argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
+echo "Access ArgoCD UI via port-forward:"
+echo "  kubectl port-forward svc/argocd-server -n argocd 8443:443"
+echo "  Open https://localhost:8443"
 echo ""
 echo "Login with username: admin"
