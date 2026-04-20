@@ -15,7 +15,7 @@ spec:
     path: K8s/overlays/dev/backend
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: lumina-dev
   syncPolicy:
     automated:
       prune: true
