@@ -17,6 +17,7 @@ spec:
       containers:
       - name: lumina-frontend
         image: nyeinchan312/lumina-frontend:dev
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
         env:
