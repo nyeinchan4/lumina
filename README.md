@@ -10,45 +10,56 @@ Simple project with:
 
 - Frontend: React (Vite)
 - Backend: Node.js + Express
-- Database: PostgreSQL (local Docker or AWS RDS)
+- Database: PostgreSQL (AWS RDS)
 - Infrastructure: Terraform (AWS EKS + RDS + VPC)
-- Ingress: Traefik on EKS (Classic ELB via AWS Cloud Controller)
-- CI/CD: GitHub Actions + ArgoCD (GitOps)
+- Ingress: Traefik (NodePort on EKS)
+- CI/CD: GitHub Actions + ArgoCD Image Updater (GitOps)
 
 ## Project Structure
 
 ```
 Lumina/
 ├── app/
-│   ├── backend/                    # Node.js + Express API
-│   └── frontend/                   # React (Vite)
+│   ├── backend/                        # Node.js + Express API
+│   └── frontend/                       # React (Vite)
 ├── K8s/
 │   ├── base/
-│   │   ├── frontend/
+│   │   ├── backend/
 │   │   │   ├── deployment.yaml
-│   │   │   └── service.yaml
-│   │   └── backend/
+│   │   │   ├── service.yaml
+│   │   │   ├── ingress.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   └── secret.yaml             # RDS credentials (gitignored)
+│   │   └── frontend/
 │   │       ├── deployment.yaml
 │   │       ├── service.yaml
-│   │       └── secret.yaml         # RDS credentials (gitignored)
+│   │       ├── ingress.yaml
+│   │       └── kustomization.yaml
+│   ├── overlays/
+│   │   ├── dev/
+│   │   │   ├── backend/
+│   │   │   │   └── kustomization.yaml  # image tag: dev
+│   │   │   └── frontend/
+│   │   │       └── kustomization.yaml  # image tag: dev
 │   ├── ingress-controller/
 │   │   ├── install.sh
 │   │   └── values.yaml
 │   └── argocd/
 │       ├── install.sh
 │       ├── backend-app.yaml
-│       └── frontend-app.yaml
+│       ├── frontend-app.yaml
+│       └── dockerhub-secret.yaml       # Image Updater credentials (gitignored)
 ├── .github/
 │   └── workflows/
-│       ├── backend.yml             # Build, push, update image tag
-│       └── frontend.yml            # Build, push, update image tag
+│       ├── backend-dev.yml             # Build & push backend :dev image
+│       └── frontend-dev.yml            # Build & push frontend :dev image
 └── terraform/
-    ├── DEV/                        # Root module (entry point)
+    ├── DEV/                            # Root module (entry point)
     └── modules/
-        ├── networking/             # VPC, subnets, IGW, NAT
-        ├── eks_cluster/            # EKS control plane + IAM
-        ├── eks_cluster_nodes/      # Self-managed nodes + ASG
-        └── rds/                    # PostgreSQL RDS instance
+        ├── networking/                 # VPC, subnets, IGW, NAT
+        ├── eks_cluster/                # EKS control plane + IAM
+        ├── eks_cluster_nodes/          # Self-managed nodes + ASG
+        └── rds/                        # PostgreSQL RDS instance
 ```
 
 ## API Endpoints
@@ -102,21 +113,23 @@ Frontend runs on `http://localhost:5173`.
 Build images:
 
 ```bash
-docker build -t lumina-backend:latest ./app/backend
-docker build -t lumina-frontend:latest --build-arg VITE_API_URL=http://localhost:4000 ./app/frontend
+docker build -t lumina-backend:dev ./app/backend
+docker build -t lumina-frontend:dev \
+  --build-arg VITE_API_URL=http://localhost:4000 \
+  ./app/frontend
 ```
 
 Run containers:
 
 ```bash
 docker run -d --name lumina-postgres -p 5432:5432 \
-  -e POSTGRES_DB=appdb \
+  -e POSTGRES_DB=coredb \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=postgres \
   postgres:16
 
-docker run -d --name lumina-backend -p 4000:4000 --env-file app/backend/.env.docker lumina-backend:latest
-docker run -d --name lumina-frontend -p 8080:80 lumina-frontend:latest
+docker run -d --name lumina-backend -p 4000:4000 --env-file app/backend/.env.docker lumina-backend:dev
+docker run -d --name lumina-frontend -p 8080:80 lumina-frontend:dev
 ```
 
 - Frontend available at `http://localhost:8080`
@@ -125,21 +138,21 @@ docker run -d --name lumina-frontend -p 8080:80 lumina-frontend:latest
 
 ---
 
-## CI/CD Pipeline (GitHub Actions + ArgoCD)
+## CI/CD Pipeline (GitHub Actions + ArgoCD Image Updater)
 
 ### How it works
 
 ```
-Push code to main
-      ↓
+Push code to app/backend or app/frontend
+        ↓
 GitHub Actions
   ├── Build Docker image
-  ├── Push to Docker Hub (tagged with git SHA)
-  └── Commit new image tag to k8s/base/*/deployment.yaml
-                ↓
-          ArgoCD detects Git change
-                ↓
-          ArgoCD syncs deployment to EKS automatically
+  └── Push to Docker Hub (:dev tag)
+              ↓
+  ArgoCD Image Updater polls Docker Hub every 2 min
+  detects digest change on :dev tag
+              ↓
+  ArgoCD syncs rolling restart to EKS (lumina-dev namespace)
 ```
 
 ### GitHub Secrets Required
@@ -148,17 +161,13 @@ GitHub Actions
 |---|---|
 | `DOCKERHUB_USERNAME` | Docker Hub username |
 | `DOCKERHUB_TOKEN` | Docker Hub access token |
-| `VITE_API_URL` | Backend URL baked into frontend image (e.g. `http://<elb-hostname>`) |
-| `GH_PAT` | GitHub Personal Access Token with `repo` scope — allows Actions to push image tag commits back to the repo |
-
-> Generate `GH_PAT` at: GitHub → Settings → Developer Settings → Personal Access Tokens
 
 ### Workflows
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `backend.yml` | Push to `app/backend/**` | Builds & pushes backend image, updates `k8s/base/backend/deployment.yaml` |
-| `frontend.yml` | Push to `app/frontend/**` | Builds & pushes frontend image, updates `k8s/base/frontend/deployment.yaml` |
+| `backend-dev.yml` | Push to `app/backend/**` | Builds & pushes `lumina-backend:dev` |
+| `frontend-dev.yml` | Push to `app/frontend/**` | Builds & pushes `lumina-frontend:dev` |
 
 ---
 
@@ -183,10 +192,11 @@ This provisions:
 - EKS cluster (`dev-cluster`) with self-managed node group (2x `t3.medium`)
 - RDS PostgreSQL (`db.t3.micro`, private subnets, no public access)
 
-### Get RDS Endpoint
+### Outputs
 
 ```bash
-terraform output rds_endpoint
+terraform output rds_endpoint       # Use as DB_HOST in secret.yaml
+terraform output eks_node_role_arn  # Use in aws-auth-cm.yaml
 ```
 
 ### Modules
@@ -206,56 +216,29 @@ terraform output rds_endpoint
 
 ### 1) Configure kubectl
 
-After `terraform apply`, update your local kubeconfig to connect to the cluster:
-
 ```bash
 aws eks update-kubeconfig --region us-east-1 --name dev-cluster
-```
-
-Verify connection:
-
-```bash
 kubectl get nodes
 ```
 
-Nodes will show `NotReady` at this point — that's expected until `aws-auth` is applied.
+Nodes will show `NotReady` until `aws-auth` is applied.
 
 ### 2) Apply aws-auth ConfigMap
-
-This allows the worker nodes to join the cluster. Get the node IAM role ARN from Terraform output first:
 
 ```bash
 cd terraform/DEV
 terraform output eks_node_role_arn
 ```
 
-Then update `rolearn` in `terraform/aws-auth-cm.yaml` with the actual ARN:
-
-```yaml
-data:
-  mapRoles: |
-    - rolearn: arn:aws:iam::<account-id>:role/<node-role-name>
-      username: system:node:{{EC2PrivateDNSName}}
-      groups:
-        - system:bootstrappers
-        - system:nodes
-```
-
-Apply it:
+Update `rolearn` in `terraform/aws-auth-cm.yaml` then apply:
 
 ```bash
 kubectl apply -f terraform/aws-auth-cm.yaml
+kubectl get nodes   # should show Ready
 ```
 
-Verify nodes are ready:
+### 3) Install Traefik Ingress Controller
 
-```bash
-kubectl get nodes
-```
-
-All nodes should show `Ready` status within a few minutes.
-
-### Install Traefik Ingress Controller
 
 ```bash
 cd K8s/ingress-controller
@@ -266,67 +249,85 @@ Verify:
 
 ```bash
 kubectl -n traefik get pods
-kubectl -n traefik get svc        # EXTERNAL-IP should show ELB hostname
+kubectl -n traefik get svc
 kubectl get ingressclass
 ```
 
-### Install ArgoCD
+### 4) Install ArgoCD
 
 ```bash
 cd K8s/argocd
 bash install.sh
 ```
 
-Get admin password and URL:
+Access ArgoCD UI via port-forward:
 
 ```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
-kubectl -n argocd get svc argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+kubectl port-forward svc/argocd-server -n argocd 8443:443
+# open https://localhost:8443
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath='{.data.password}' | base64 -d
 ```
 
-### Register ArgoCD Applications
+### 5) Create Docker Hub credentials for Image Updater
 
-**1) Update `repoURL` in both app manifests:**
+Fill in `K8s/argocd/dockerhub-secret.yaml` then apply:
+
+```bash
+kubectl apply -f K8s/argocd/dockerhub-secret.yaml
+```
+
+### 6) Apply DB Secret (one-time, gitignored)
+
+Fill in `K8s/base/backend/secret.yaml` with RDS credentials:
 
 ```yaml
-# K8s/argocd/backend-app.yaml and frontend-app.yaml
-source:
-  repoURL: https://github.com/<your-username>/<your-repo>.git
+stringData:
+  DB_HOST: "<terraform output rds_endpoint>"
+  DB_PORT: "5432"
+  DB_NAME: "coredb"
+  DB_USER: "postgres"
+  DB_PASSWORD: "<your-db-password>"
+  JWT_SECRET: "<your-jwt-secret>"
+  DB_SSL: "true"
 ```
 
-**2) Apply:**
+Apply to `lumina-dev` namespace:
+
+```bash
+kubectl create namespace lumina-dev --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f K8s/base/backend/secret.yaml -n lumina-dev
+```
+
+### 7) Register ArgoCD Applications
 
 ```bash
 kubectl apply -f K8s/argocd/backend-app.yaml
 kubectl apply -f K8s/argocd/frontend-app.yaml
 ```
 
-ArgoCD will now automatically sync any changes to `K8s/base/` to the EKS cluster.
+ArgoCD will create the `lumina-dev` namespace and deploy all resources automatically.
 
-### DB Credentials (One-time setup)
-
-**1) Fill in RDS credentials in `K8s/base/backend/secret.yaml`:**
-
-```yaml
-stringData:
-  DB_HOST: "<terraform output rds_endpoint>"
-  DB_PORT: "5432"
-  DB_NAME: "appdb"
-  DB_USER: "postgres"
-  DB_PASSWORD: "<your-db-password>"
-  JWT_SECRET: "<your-jwt-secret>"
-```
-
-**2) Apply the secret manually (it is gitignored):**
+Verify:
 
 ```bash
-kubectl apply -f K8s/base/backend/secret.yaml
+kubectl get applications -n argocd
+kubectl get all -n lumina-dev
 ```
+
+### 8) Test with port-forward or ingress 
+
+```bash
+kubectl port-forward svc/lumina-frontend-service 8080:80 -n lumina-dev &
+kubectl port-forward svc/lumina-backend-service 4000:4000 -n lumina-dev &
+```
+
+Open `http://localhost:8080`.
 
 ### How DB Credentials Work
 
 ```
-RDS (Terraform) → secret.yaml → K8s Secret → backend Pod (env vars via envFrom)
+RDS (Terraform) → secret.yaml (manual) → K8s Secret → backend Pod (envFrom)
 ```
 
 > `secret.yaml` is gitignored — never commit real credentials.
@@ -338,4 +339,5 @@ RDS (Terraform) → secret.yaml → K8s Secret → backend Pod (env vars via env
 - No email verification required for account creation
 - Passwords are hashed with bcrypt
 - Login accepts username or email
-- For in-cluster frontend-to-backend communication, use `http://lumina-backend-service:4000`
+- All resources deployed to `lumina-dev` namespace
+- ArgoCD Image Updater detects new `:dev` image digest and triggers rolling restart automatically

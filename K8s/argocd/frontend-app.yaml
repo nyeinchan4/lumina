@@ -11,7 +11,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/nyeinchan4/lumina.git
-    targetRevision: master
+    targetRevision: develop
     path: K8s/overlays/dev/frontend
   destination:
     server: https://kubernetes.default.svc

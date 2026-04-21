@@ -1,3 +1,0 @@
-# ingress-app.yaml is no longer needed.
-# Frontend ingress is managed by lumina-frontend-dev ArgoCD app (K8s/overlays/dev/frontend)
-# Backend ingress is managed by lumina-backend-dev ArgoCD app (K8s/overlays/dev/backend)
